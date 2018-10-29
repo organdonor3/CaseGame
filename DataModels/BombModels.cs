@@ -10,6 +10,13 @@ namespace DataModels
         Defuse
     }
 
+    public enum ModStatus
+    {
+        No_Change = 0,
+        Modified = 1,
+        Working = 2,
+    }
+
     public class Game
     {
         public string Name { get; set; }
@@ -32,6 +39,7 @@ namespace DataModels
         public int Value { get; set; }
         public int ReadOffset { get; set; }
         public int ReadLength { get; set; }
+        public byte PacketAddress { get; set; }
     }
     public class LED : Widget
     {
@@ -55,16 +63,12 @@ namespace DataModels
                 {
                     Name = "BasicMod",
                     I2CAddress = 0x08,
-                    PacketBytes = 1,
+                    PacketBytes = 2,
                     Widgets = new List<Widget>
                     {
-                        new LED
-                        {
-                            ReadOffset = 2,
-                            ReadLength = 1,
-                        },
                         new Button
                         {
+                            PacketAddress = 0x01,
                             ReadOffset = 1,
                             ReadLength = 1,
                         }

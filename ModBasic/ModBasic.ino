@@ -1,6 +1,7 @@
 #include <Wire.h>
 
 //Pins
+const int PIN_LED_STATUS = 13;
 const int PIN_LED_RED = 9;
 const int PIN_LED_GREEN = 8;
 const int PIN_LED_BLUE = 7;
@@ -26,18 +27,28 @@ int blue = 0;
 
 
 void setup() {
+	Serial.begin(9600);
+
 	pinMode(PIN_LED_RED, OUTPUT);
 	pinMode(PIN_LED_GREEN, OUTPUT);
 	pinMode(PIN_LED_BLUE, OUTPUT);
-	pinMode(PIN_BUTTON, INPUT);
+	pinMode(PIN_LED_STATUS, OUTPUT);
+	pinMode(PIN_BUTTON, INPUT_PULLUP);
 
 	Wire.begin(MOD_ADDRESS);
-	Wire.onRequest(requestEvent);
+	Wire.onRequest(sendState);
+	Wire.onReceive(updateState);
 
 	setColor(0, 0, 255);
 }
 
 void loop() {
+
+	//Poll state
+	if (stateRequested) {
+		sendStatus();
+	}
+
 
 	//Debounce button loop
 	int newButtonState = digitalRead(PIN_BUTTON);
@@ -46,10 +57,9 @@ void loop() {
 	}
 	if ((millis() - lastDebounceTime) > debounceDelay) {
 		if (newButtonState != bitRead(state[0], BUTTON_STATE_BIT)) {
-			//Set updated state bit
-			bitSet(state[0], STATE_CHANGED_BIT);
-			//Set button bit
+
 			bitWrite(state[0], BUTTON_STATE_BIT, newButtonState);
+			bitSet(state[0], STATE_CHANGED_BIT);
 
 			// Set LED on mod when button pressed
 			if (bitRead(state[0], BUTTON_STATE_BIT) == HIGH) {
@@ -63,10 +73,6 @@ void loop() {
 	lastButtonState = newButtonState;
 
 
-	//Poll state
-	if (stateRequested) {
-		sendStatus();
-	}
 }
 
 void setColor(int redValue, int greenValue, int blueValue) {
@@ -76,12 +82,20 @@ void setColor(int redValue, int greenValue, int blueValue) {
 }
 
 
-void requestEvent() {
-	stateRequested = true;
+void sendState() {
+	//stateRequested = true;
+	sendStatus();
+}
+
+void updateState(int bytesCount) {
+	byte data = Wire.read();
+	Serial.println(String(data, BIN));
 }
 
 void sendStatus() {
 
+
+	stateRequested = false;
 	if (bitRead(state[0], STATE_CHANGED_BIT)) {
 		Wire.write((byte*)state, BUFFER_SIZE);
 		bitClear(state[0], STATE_CHANGED_BIT);
@@ -92,7 +106,6 @@ void sendStatus() {
 		Wire.write((byte*) new byte[1]{ 0x00 }, 1);
 		setColor(0, 0, 0);
 	}
-	stateRequested = false;
 }
 
 

@@ -122,15 +122,24 @@ namespace MasterController
                 {
                     byte[] readBuffer = new byte[mod.PacketBytes];
                     var device = mods[mod.Name];
-                    device.WriteRead(new byte[] { mod.I2CAddress }, readBuffer);
+                    //device.WriteRead(new byte[] { mod.I2CAddress }, readBuffer);
+                    device.Read(readBuffer);
 
                     StatusText.Text = ByteArrayToString(readBuffer);
+
+                    foreach (var widget in mod.Widgets)
+                    {
+                        var toggled = (byte)(readBuffer[0] & widget.PacketAddress) == 0x00;
+                        LED_1.Fill = toggled ? redBrush : grayBrush;
+                    }
+
                 }
                 catch (Exception ex)
                 {
                     StatusText.Text = ex.Message;
                 }
             }
+            
         }
 
         public static string ByteArrayToString(byte[] ba)

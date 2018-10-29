@@ -14,6 +14,7 @@
             <TextBlock x:Name="DelayText" Text="500ms" Margin="10" TextAlignment="Center" FontSize="26.667" />
             <TextBlock x:Name="GpioStatus" Text="Waiting to initialize GPIO..." Margin="10,50,10,10" TextAlignment="Center" FontSize="26.667" />
             <TextBlock x:Name="StatusText" Text="Status: Initializing...." Margin="10,50,10,10" TextAlignment="Center" FontSize="26.667" />
+            <Ellipse x:Name="LED_1" Fill="LightGray" Stroke="White" Width="10" Height="10" Margin="10"/>
         </StackPanel>
     </Grid>
 </Page>
