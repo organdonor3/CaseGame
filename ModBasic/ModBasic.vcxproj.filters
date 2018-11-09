@@ -16,6 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="ModBasic.ino" />
+    <None Include="ET-SDP8.docx" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="__vm\.ModBasic.vsarduino.h">

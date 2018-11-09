@@ -10,11 +10,12 @@
 
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-            <Ellipse x:Name="LED" Fill="LightGray" Stroke="White" Width="100" Height="100" Margin="10"/>
-            <TextBlock x:Name="DelayText" Text="500ms" Margin="10" TextAlignment="Center" FontSize="26.667" />
-            <TextBlock x:Name="GpioStatus" Text="Waiting to initialize GPIO..." Margin="10,50,10,10" TextAlignment="Center" FontSize="26.667" />
+            <StackPanel x:Name="Buttons" HorizontalAlignment="Center" VerticalAlignment="Center" Orientation="Horizontal">
+            </StackPanel>
             <TextBlock x:Name="StatusText" Text="Status: Initializing...." Margin="10,50,10,10" TextAlignment="Center" FontSize="26.667" />
-            <Ellipse x:Name="LED_1" Fill="LightGray" Stroke="White" Width="10" Height="10" Margin="10"/>
+            <TextBlock x:Name="DebugText" Text="" Margin="10,50,10,10" TextAlignment="Center" FontSize="26.667" />
+            <TextBox x:Name="DisplayText" HorizontalAlignment="Center" Margin="0,5,0,0" Text="Hello SPI!" VerticalAlignment="Top" FontFamily="Microsoft Sans Serif" FontSize="32" Width="350" Height="48"/>
+
         </StackPanel>
     </Grid>
 </Page>
