@@ -1,5 +1,6 @@
 ﻿using DataModels;
-using MasterController.Util;
+using Glovebox.Graphics.Drivers;
+using Glovebox.Graphics.Components;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -22,24 +23,24 @@ using Windows.UI.Xaml.Input;
 using Windows.UI.Xaml.Media;
 using Windows.UI.Xaml.Navigation;
 using Windows.UI.Xaml.Shapes;
+using Windows.Devices.SerialCommunication;
+using Windows.Storage.Streams;
 
 namespace MasterController
 {
     public sealed partial class MainPage : Page
     {
         //Pins
-        private const int SPI_CHIP_SELECT_LINE = 0; 
-        private const int SPI_DATA_COMMAND_PIN = 22;
         private const int GAME_VICTORY_LED_PIN = 5;
-        private GpioPin spiCommandPin;
         private GpioPin victoryPin;
 
         //Devices
         private const string SPI_CONTROLLER_NAME = "SPI0";
         private GpioController IoController;
-        private SpiDevice SpiDisplay;
         private Dictionary<string, I2cDevice> mods;
-        //private Max7219 timerDisplay = new Max7219();
+        SevenSegmentDisplay ssd;
+        SerialDevice serialPort;
+        DataWriter dataWriteObject = null;
 
         //Gui
         private SolidColorBrush redBrush = new SolidColorBrush(Windows.UI.Colors.Red);
@@ -49,7 +50,7 @@ namespace MasterController
 
         //Game
         private const double STATUS_CHECK_TIMER_INTERVAL = 50;
-        private const double STATUS_UPDATE_TIMER_INTERVAL = 1000;
+        private const double STATUS_UPDATE_TIMER_INTERVAL = 100;
         private DispatcherTimer statusCheckTimer;
         private DispatcherTimer statusUpdateTimer;
         private Game game = DefaultModels.DefaultGame;
@@ -71,9 +72,8 @@ namespace MasterController
             {
                 InitGpio();
                 await InitI2c();
-                await InitSpi();
+                await InitSerial();
                 await InitDisplay();
-                //timerDisplay.Init(21, 26, 13, ref IoController);
             }
             catch (Exception ex)
             {
@@ -104,22 +104,37 @@ namespace MasterController
             statusCheckTimer.Start();
         }
 
-        private async Task InitSpi()
+        private async Task InitSpi(int chipSelectPin)
         {
             try
             {
-                var settings = new SpiConnectionSettings(SPI_CHIP_SELECT_LINE);
+                var settings = new SpiConnectionSettings(chipSelectPin);
                 settings.ClockFrequency = 10000000;
                 settings.Mode = SpiMode.Mode0;
                                                                                  
                 var controller = await SpiController.GetDefaultAsync();
-                SpiDisplay = controller.GetDevice(settings);
+                var device = controller.GetDevice(settings);
 
             }
             catch (Exception ex)
             {
                 throw new Exception("SPI Initialization Failed", ex);
             }
+        }
+
+        private async Task InitSerial()
+        {
+            string aqs = SerialDevice.GetDeviceSelector();
+            var dis = await DeviceInformation.FindAllAsync(aqs);
+
+            serialPort = await SerialDevice.FromIdAsync(dis[0].Id);
+
+            serialPort.WriteTimeout = TimeSpan.FromMilliseconds(1000);
+            serialPort.ReadTimeout = TimeSpan.FromMilliseconds(1000);
+            serialPort.BaudRate = 19200;
+            serialPort.Parity = SerialParity.None;
+            serialPort.StopBits = SerialStopBitCount.One;
+            serialPort.DataBits = 8;
         }
 
         private void InitGpio()
@@ -180,14 +195,13 @@ namespace MasterController
             /* Initialize the display */
             try
             {
-                SpiDisplay.Write(SegmentDisplay.MODE_SCAN_LIMIT);
-                await Task.Delay(10);
-                SpiDisplay.Write(SegmentDisplay.MODE_INTENSITY);
-                await Task.Delay(10);
-                SpiDisplay.Write(SegmentDisplay.MODE_POWER);
-                await Task.Delay(10);
-                SpiDisplay.Write(SegmentDisplay.MODE_TEST); // Turn on all LEDs.
-                await Task.Delay(10);
+                var driver = new MAX7219(2);
+                ssd = new SevenSegmentDisplay(driver);
+                ssd.FrameClear();
+                ssd.FrameDraw();
+                ssd.SetBrightness(10);
+
+                await SerialWriteAsync("Starting...");
             }
             catch (Exception ex)
             {
@@ -195,29 +209,11 @@ namespace MasterController
             }
         }
 
-        private void SpiSendData(byte[] Data)
-        {
-            spiCommandPin.Write(GpioPinValue.High);
-            SpiDisplay.Write(Data);
-        }
-
-        private void SpiSendCommand(byte[] Command)
-        {
-            spiCommandPin.Write(GpioPinValue.Low);
-            SpiDisplay.Write(Command);
-        }
-
-
         private void StatusUpdateTimer_Tick(object sender, object e)
         {
-            var elapsed = (DateTime.Now - gameStart).TotalSeconds.ToString().ToCharArray();
-            for (int i = 0; i < elapsed.Length; i++)
-            {
-                var buffer = new byte[9];
-                buffer[0] = (byte)(i + 1);
-                Buffer.BlockCopy(SegmentDisplay.CharCode(elapsed[i]), 0, buffer, 1, 8);
-                SpiDisplay.Write(buffer);
-            }
+            var elapsed = (DateTime.Now - gameStart).TotalSeconds;
+            ssd.DrawString(elapsed.ToString("0.0"));
+            ssd.FrameDraw();
             //timerDisplay.Send(SegmentEncoding.Integer, (int)elapsed.TotalSeconds);
         }
 
@@ -247,7 +243,7 @@ namespace MasterController
                             //{
                             //    valBuffer[i] = readBuffer[widget.Offset + i];
                             //}
-                            Buffer.BlockCopy(readBuffer, widget.Offset, valBuffer, 0, widget.Size);
+                            System.Buffer.BlockCopy(readBuffer, widget.Offset, valBuffer, 0, widget.Size);
                             widget.Value = BitConverter.ToUInt16(valBuffer, 0);
 
                             if (widget is DataModels.Button)
@@ -309,19 +305,45 @@ namespace MasterController
 
         private void DisplayText_TextChanged(object sender, TextChangedEventArgs e)
         {
-            DisplayTextBoxContents();
+
         }
 
-        private void DisplayTextBoxContents()
+        private async Task SerialWriteAsync(string Text)
         {
+            Task<UInt32> storeAsyncTask;
+
             try
             {
-                
+                if (serialPort != null && Text.Length != 0)
+                {
+                    dataWriteObject = new DataWriter(serialPort.OutputStream);
+                    // Load the text from the sendText input text box to the dataWriter object
+                    dataWriteObject.WriteString(Text);
+
+                    // Launch an async task to complete the write operation
+                    storeAsyncTask = dataWriteObject.StoreAsync().AsTask();
+
+                    UInt32 bytesWritten = await storeAsyncTask;
+                }
+                else
+                {
+                    DebugText.Text = "Failed to write to serial";
+                }
             }
             catch (Exception ex)
             {
-                DebugText.Text = "\nException: " + ex.Message;
+                DebugText.Text = ex.Message;
             }
+            finally
+            {
+                // Cleanup once complete
+                if (dataWriteObject != null)
+                {
+                    dataWriteObject.DetachStream();
+                    dataWriteObject = null;
+                }
+            }
+
         }
 
         public static string ByteArrayToString(byte[] ba)
@@ -339,8 +361,6 @@ namespace MasterController
             {
                 device.Dispose();
             }
-            SpiDisplay.Dispose();
-            spiCommandPin.Dispose();
             victoryPin.Dispose();
             //timerDisplay.Dispose();
         }
